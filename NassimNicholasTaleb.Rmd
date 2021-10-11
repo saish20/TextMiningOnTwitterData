@@ -1,0 +1,336 @@
+---
+title: "Nassim Nicholas Taleb"
+author: "WSMA Group 10"
+group members: "Chetaan More | Kunal Gala | Navneet Nandan | Saish Mayekar | Swapnil Dilip Mhatre"
+date: "25 February 2018"
+output: html_document
+---
+
+## R Markdown
+
+This is an R Markdown document.It includes Case Analysis of Celebrity "Nassim Nicholas Taleb" using tweets fetched from Twitter.
+
+
+```{r - Clear Memory & Set wd}
+rm(list=ls())
+library(twitteR)
+```
+
+Keywords: search is a text file that contains a single word "nntaleb"
+          Combination is a text file consisting of several words - Antifragile, Black Swan, Essayist, Trump,               Hedge, Financial, etc.
+```{r - Read Keywords / search wrds}
+df <- read.table("search.txt",header=FALSE)
+Combination <-read.table("Combination.txt",header=FALSE)
+```
+
+These Authentication Codes are obtained from Twitter API aaplication
+
+```{r - Authentication Codes}
+consumer_key <-"5rVGq4xHvMXPr4RJnwVHDOAoK"
+consumer_secret <-"TwoX2Q3b2EV0jDl2CvkvgaDHTk0xZKdO1OhNFs6SGNBZhbdb1O"
+access_key <-"929541444334886913-CCFRfo1R5i6pX0lOQmUsiDMr9knT0BZ"
+access_secret <-  "tR8BiCgheF4Dk1C5qMKA8qFYe04YYYurIUwC4QFPvZbbV"
+  
+setup_twitter_oauth(consumer_key,consumer_secret,access_key,access_secret)
+```
+
+Fetching Tweets
+
+```{r - for loop to fetch tweets}
+for(i in 1:nrow(df))
+  {
+  for(j in 1:nrow(Combination))
+    {
+  str1 <- as.character(df[i,])
+  str2 <- as.character(Combination[j,]) 
+  str2 <- paste("+" ,str2,sep=" ")
+  searchString <- paste(str1 ,str2  ,sep=" ")
+  tweets_data <-searchTwitter(searchString,lang="en",n=5000,since="2018-01-01")
+  retweets_data_df <-do.call("rbind",lapply(tweets_data,as.data.frame))
+  write.table(retweets_data_df,file="nntalebTweets.csv",append=TRUE,sep=",",col.names = T)
+    }
+}
+```
+
+All the Fetched tweets are stored in a csv file - "nntalebTweets"
+Necessary columns are kept and rest are removed from the file. Columns like Lattitude, Longitude, etc. are removed
+
+New semi-cleaned file name is - "NassimNicholasTalebTweets" - csv format
+
+## Cleaning of Tweets
+
+Install the Following Libraries
+```{r - Install following libraries}
+library(tm)
+library(tmap)
+library(wordcloud)
+library(RColorBrewer)
+library(wordcloud)
+library(topicmodels)
+library(plyr)
+library(ggplot2)
+library(RTextTools)
+library(e1071)
+library(SnowballC)
+library(data.table)
+library(stringi)
+library(qdap)
+library(dplyr)
+library(rJava)
+library(syuzhet)
+library(grid)
+library(gridExtra)
+library(RTextTools)
+library(textcat)
+library(stringr)
+```
+
+
+Uploading Tweets and Correcting Formats. Also read the Formats once
+
+```{r - Uploading tweets and correcting format. Also read the formats once}
+tweetC.df <- read.csv("nntalebTweets.csv")
+
+tweetC.df$date <- as.Date(tweetC.df$date, format= "%d-%m-%Y %H:%M")
+tweetC.df$username <- paste("",sep="@",as.character(tweetC.df$username),collapse=NULL)
+tweetC.df$text <- as.character(tweetC.df$text)
+str(tweetC.df)
+```
+
+Remove rows with no username and create temporary corpus
+
+```{r - remove rows with no username and create temporary corpus}
+tweetC.df<-dplyr::filter(tweetC.df, !grepl('@$',username))
+tweetS.df <-data.frame(doc_id=tweetC.df$date,text=tweetC.df$text)
+```
+
+Remove rows with Blank - text
+
+```{r - remove rows with Blank - text}
+myCorpus<- Corpus(DataframeSource(tweetS.df))
+```
+
+Remove URL
+```{r - Remove URL}
+removeURL <- function(x) gsub("?(f|ht)(tp)(s?)(://)(.*)[.|/](.*)","", x)   
+myCorpus <- tm_map(myCorpus, content_transformer(removeURL))
+
+removeURL2 <- function(x) gsub("pic.twitter.com/[a-z,A-Z,0-9]*{8}","", x)   
+myCorpus <- tm_map(myCorpus, content_transformer(removeURL2))
+```
+
+Remove Re-Tweets
+```{r - Remove Re-Tweets}
+removeRT <- function(x) gsub("RT @[a-z,A-Z,0-9]*{8}", "", x)  
+myCorpus <- tm_map(myCorpus, content_transformer(removeRT))
+```
+
+Remove non-numeric / non-english
+```{r - Remove non-numeric / non-english}
+removeUTL <- function(x) gsub("[^0-9A-Za-z///' ]", "", x)
+myCorpus <- tm_map(myCorpus, content_transformer(removeUTL))
+
+removeUTL1 <- function(x) gsub("[^\x20-\x7E]", "", x)
+myCorpus <- tm_map(myCorpus, content_transformer(removeUTL1))
+
+removeUTL2 <- function(x) gsub("[0-9]", "", x)
+myCorpus <- tm_map(myCorpus, content_transformer(removeUTL2))
+```
+
+Remove handles
+
+```{r - Remove handles}
+removehandle <- function(x) gsub("@\\w+", "", x)  
+myCorpus <- tm_map(myCorpus, content_transformer(removehandle))
+```
+
+Remove Special Charaters
+
+```{r - Remove Special Charaters}
+removeURL1 <- function(x) gsub("[@(?!.*@).*$]", "", x)  
+myCorpus <- tm_map(myCorpus, content_transformer(removeURL1))
+```
+
+Remove Timetags
+
+```{r - Remove Timetags}
+removett <- function(x) gsub(pattern="00:00", "", x) 
+myCorpus <- tm_map(myCorpus, content_transformer(removett))
+```
+
+Remove hashtags
+
+```{r - Remove hashtags}
+removehash <- function(x) gsub("#\\w+", "", x)  
+myCorpus <- tm_map(myCorpus, content_transformer(removehash))
+```
+
+Remove dash - 
+
+```{r - Remove dash - }
+removedash <- function(x) gsub("-\\w+", "", x)  
+myCorpus <- tm_map(myCorpus, content_transformer(removedash))
+```
+
+Remove semicolon ;
+
+```{r - Remove semicolon ;}
+removesemi <- function(x) gsub(";\\w+", "", x)  
+myCorpus <- tm_map(myCorpus, content_transformer(removesemi))
+```
+
+Remove punctuation
+
+```{r - Remove punct}
+removepunct <- function(x) gsub("[[:punct:]]", "", x)  
+myCorpus <- tm_map(myCorpus, content_transformer(removepunct))
+```
+
+Remove @tabs
+
+```{r - remove @tabs}
+removetab <- function(x) gsub("[|\t]{2,}", "", x)  
+myCorpus <- tm_map(myCorpus, content_transformer(removetab))
+```
+
+Convert text to lower case
+
+```{r - text to lower case}
+myCorpus <- tm_map(myCorpus, content_transformer(tolower))
+```
+
+Remove Blanks
+
+```{r - Remove Blanks}
+removeblnk1 <- function(x) gsub("^ ", "", x)  
+myCorpus <- tm_map(myCorpus, content_transformer(removeblnk1))
+
+removeblnk2 <- function(x) gsub(" $", "", x)  
+myCorpus <- tm_map(myCorpus, content_transformer(removeblnk2))
+```
+
+Remove single words
+
+```{r - Remove single words}
+removeSingle <- function(x) gsub(" . ", " ", x)   
+myCorpus <- tm_map(myCorpus, content_transformer(removeSingle))
+```
+
+```{r - To take care of NA introduced by Coercion}
+myCorpus <- as.character(gsub(",","",myCorpus,fixed=TRUE))
+```
+
+
+Remove Stop words
+```{r - Remove Stop words}
+
+myStopWords<- c((stopwords('english')),c("book","point","nntaleb","rt","putting","well","many","nntal","points","trying","made","can","see","says","people","say","something","kept","nntalebs","w","appl","must","tales","cant","pay","pays","us","thats","got","t","im","takes","hes","sitg","books","bsing","bs","anyone","someone","tell","aka","took","tells","werent","spoke","want","id","get","one","arent","never","take","tom","taleb","talebs","also","doesnt","enough","long","mr","comes","bri","abhishek","going","thread","even","make","just","dont","know","will","amp","way","like","twitter","makes","talk","come","getting","clear","things","new","read","thing","wait"))
+
+#myCorpus<- tm_map(myCorpus,removeWords , myStopWords)
+
+```
+
+Remove @blanks
+
+```{r - Remove @blanks}
+#myCorpus <- tm_map(myCorpus, content_transformer(removeblnk1))
+$myCorpus <- tm_map(myCorpus, content_transformer(removeblnk2))
+```
+
+write an output csv file
+
+```{r - write a csv file}
+tweetadd.df<-as.data.frame(myCorpus)
+tweetC.df$clrtext<-tweetadd.df$text
+write.csv(file="cleannntaleb.csv",x=tweetadd.df)
+```
+
+CSV to dataframe in R - tdm or a dtm for further Analysis
+
+```{r - Creating a TermDocumentMatrix}
+tdm <- TermDocumentMatrix(myCorpus, control = list(wordLengths= c(1,Inf)))
+tdm
+```
+
+Frequency Analysis
+
+```{r - Frequency of words}
+(freq.terms <- findFreqTerms(tdm, lowfreq = 75))
+term.freq <- rowSums(as.matrix(tdm))
+term.freq <- subset(term.freq, term.freq > 75)
+df1 <- data.frame(term = names(term.freq), freq= term.freq)
+```
+
+```{r - Frequency of words}
+(freq.terms <- findFreqTerms(tdm, lowfreq = 150))
+term.freq <- rowSums(as.matrix(tdm))
+term.freq <- subset(term.freq, term.freq > 150)
+df2 <- data.frame(term = names(term.freq), freq= term.freq)
+```
+
+
+```{r - Frequency of words}
+(freq.terms <- findFreqTerms(tdm, lowfreq = 250))
+term.freq <- rowSums(as.matrix(tdm))
+term.freq <- subset(term.freq, term.freq > 250)
+df3 <- data.frame(term = names(term.freq), freq= term.freq)
+```
+
+
+```{r - Frequency of words}
+(freq.terms <- findFreqTerms(tdm, lowfreq = 400))
+term.freq <- rowSums(as.matrix(tdm))
+term.freq <- subset(term.freq, term.freq > 400)
+df4 <- data.frame(term = names(term.freq), freq= term.freq)
+```
+
+#####plotting the graph of frequent terms
+```{r Graph}
+ggplot(df1, aes(reorder(term, freq),freq)) + theme_bw() + geom_bar(stat = "identity")  + coord_flip() +labs(list(title="Term Frequency Chart", x="Terms", y="Term Counts"))
+
+ggplot(df2, aes(reorder(term, freq),freq)) + theme_bw() + geom_bar(stat = "identity")  + coord_flip() +labs(list(title="Term Frequency Chart", x="Terms", y="Term Counts"))
+
+ggplot(df3, aes(reorder(term, freq),freq)) + theme_bw() + geom_bar(stat = "identity")  + coord_flip() +labs(list(title="Term Frequency Chart", x="Terms", y="Term Counts"))
+
+ggplot(df4, aes(reorder(term, freq),freq)) + theme_bw() + geom_bar(stat = "identity")  + coord_flip() +labs(list(title="Term Frequency Chart", x="Terms", y="Term Counts"))
+```
+
+#####calculate the frequency of words and sort it by frequency and setting up the Wordcloud
+
+```{r WordCloud, warning=FALSE}
+word.freq <-sort(rowSums(as.matrix(tdm)), decreasing= F)
+pal<- brewer.pal(8, "Dark2")
+wordcloud(words = names(word.freq), freq = word.freq, min.freq = 2, random.order = F, colors = pal, max.words = 100)
+```
+
+
+##### Find association with a specific keyword in the tweets - nassim, intolenrent
+
+```{r Find Association}
+findAssocs(tdm, "nassim", 0.2)
+findAssocs(tdm, "chaos", 0.2)
+```
+
+Association of word nassim with words like Fat tailed, elite, essayist, scholar, financial, theorist, thinker etc tells us about his personality and what people think about him in general.
+
+
+##### Topic Modelling to identify latent/hidden topics using LDA technique
+```{r Topic Modelling}
+dtm <- as.DocumentTermMatrix(tdm)
+
+rowTotals <- apply(dtm , 1, sum)
+
+NullDocs <- dtm[rowTotals==0, ]
+dtm   <- dtm[rowTotals> 0, ]
+
+if (length(NullDocs$dimnames$Docs) > 0) 
+{
+tweetC.df <- tweetC.df[-as.numeric(NullDocs$dimnames$Docs),]
+}
+
+lda <- LDA(dtm, k = 3) # find 5 topic
+term <- terms(lda, 5) # first 7 terms of every topic
+(term <- apply(term, MARGIN = 2, paste, collapse = ", "))
+
+topics<- topics(lda)
+```
